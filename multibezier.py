@@ -1,4 +1,5 @@
 import math
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -75,8 +76,7 @@ def cubic_bezier_basis(nbDim, nbSeg, edges_at_zero=False, C1=True):
 
         if edges_at_zero is True:
             # remove the 2 first and 2 last columns to force keypoints to 0
-            #C = C[:,2:-2]
-            C = C[:,1:-1]
+            C = C[:,2:-2]
 
     else: # C0 continuity constraint
         C0 = np.array([[1], [1]])
@@ -97,7 +97,7 @@ def cubic_bezier_basis(nbDim, nbSeg, edges_at_zero=False, C1=True):
     return phi, C
 
 
-
+# TODO: re-implement the C matrix computation for any nbSeg
 def quad_bezier_basis(nbDim, nbSeg, edges_at_zero=False, C1=True):
     """
     Computes the matrix phi whose columns are quadratic Bernstein polynomials
@@ -140,6 +140,7 @@ def quad_bezier_basis(nbDim, nbSeg, edges_at_zero=False, C1=True):
     B = np.kron(np.eye(nbSeg), B0)
 
     if C1 is True: # Continuous derivative constraint
+        # ! Only valid for nbSeg = 2
         C = np.array([
             [1,    0, 0, 0,   0],
             [0,    1, 0, 0,   0],
@@ -156,6 +157,7 @@ def quad_bezier_basis(nbDim, nbSeg, edges_at_zero=False, C1=True):
             C = C[:,2:-2]
 
     else: # C0 continuity constraint
+        # ! Only valid for nbSeg = 2
         C0 = np.array([
             [1, 0],
             [1, 0]
@@ -213,26 +215,33 @@ def subdivide_3D(x):
 Plotting functions
 ------------------
 """
-def plot_1D(x, x_hat, subdivisions=[], title=""):
-    #plt.figure(figsize=(10, 6))
-    plt.plot(x, label='original')
-    plt.plot(x_hat, label='reconstruction')
-    plt.xlabel("Samples")
-    plt.ylabel("Amplitude")
+def plot_1D(Psi, weights, x0, subdivisions=[], layers_indices = [], title=""):
+    """
+    Plot each reconstruction layer (contribution of each iteration)
+    """
+
+    fig, axs = plt.subplots(len(layers_indices)+1, 1, sharex=True)
+    fig.set_size_inches(8,2*(len(layers_indices)+1))
+
+    for l, layer in enumerate(layers_indices):
+        x_layer = Psi[:, layer]@weights[layer]
+        axs[l].plot(x_layer)
+        axs[l].set_title(f"Layer {l+1}")
+        for s, segment in enumerate(subdivisions):
+            axs[l].axvline(segment[0], c='black', alpha=0.5)
+
+    axs[-1].plot(Psi@weights, label="reconstruction")
+    axs[-1].plot(x, label="original")
     for s, segment in enumerate(subdivisions):
-        plt.axvline(segment[0], c='black', alpha=0.5)
-        #x_ctrl = np.linspace(segment[0], segment[-1]+1, nbFct)
-        #print(f"segment {s}: {x_ctrl}")
-        #for k in np.arange(0, nbFct, 2):   # assumes cubic curve
-            #print(x_ctrl[k:k+2])
-            #print(control_points[4*s + k : 4*s + k+2])
-            #print(4*s+k)
-            #print(4*s + k+2)
-            #plt.plot(x_ctrl[k:k+2], control_points[4*s + k : 4*s + k+2], 'o-', alpha=0.5)
-    plt.title(title)
-    plt.legend()
+        axs[-1].axvline(segment[0], c='black', alpha=0.5)
+    axs[-1].legend()
+    axs[-1].set_xlabel("Samples")
+    axs[-1].set_ylabel("Amplitude")
+    axs[-1].set_title(title)
+    fig.tight_layout()
 
     return
+
 
 def plot_2D(x, in_shape, subdivisions=[], title=""):
     T1, T2 = np.meshgrid(
@@ -268,6 +277,24 @@ Fitting algorithm
 """
 def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True):
     """
+    Computes an approximation of a given signal using a superposition of concatenated
+    Bézier curves of different resolutions by recursive subdivisions of the signal
+
+    Parameters
+    ----------
+    x : signal to fit (can be 1D, 2D or 3D)
+    in_shape : tuple with the size of each input dimension
+    nbOut: number of output dimensions
+    nbFct: degree + 1 of polynomials used for the fitting
+    iterations: number of subdivisions to perform
+    threshold: max RMSE of each segment for the subdivision criterion
+    C1 : bool, whether the concatenated polynomials should be C1 continuous
+
+    Returns
+    -------
+    x = Psi @ weights
+    Psi : basis functions matrix
+    weights : weights of each basis polynomial
     """
     if nbFct == 4:  # cubic
         nbSeg = 2
@@ -282,35 +309,34 @@ def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True
         suffix += 'C0'
 
     print(f"Fitting a {in_shape} -> ({nbOut}) signal with {suffix} curves")
+    # Make directories to store plots and 3D approximations
+    os.makedirs("figures", exist_ok=True)
+    os.makedirs("3D_rec", exist_ok=True)
 
     residual = np.copy(x)
     Psi = np.array([]).reshape(x.size, 0)
     weights = np.array([])
     subdivisions = [np.arange(0, x.size).reshape(in_shape)]  # indices
-
+    layers_indices = []     # to keep track of each layer contribution
 
     for i in range(0, iterations):
         new_subdivisions = []
 
         for region in subdivisions:
             residual_error = np.linalg.norm(residual[region])   # Frobenius norm
-            #print(f"Segment RMSE: {residual_error}")
             if residual_error > threshold:
-
                 # Build a 1D basis
                 if nbFct == 3:
                     phi_local,_ = quad_bezier_basis(
                         region.shape[0],
                         nbSeg,
                         edges_at_zero = (i>0),
-                        #edges_at_zero=False,
                         C1=C1)
                 elif nbFct == 4:
                     phi_local,_ = cubic_bezier_basis(
                         region.shape[0],
                         nbSeg,
                         edges_at_zero = (i>0),
-                        #edges_at_zero=False,
                         C1=C1)
 
                 # Extend 1D basis to multiple dimensions
@@ -328,16 +354,13 @@ def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True
 
                 if len(in_shape) == 1:
                     new_subdivisions.extend(np.array_split(region, nbSeg))
-
                 elif len(in_shape) == 2:
                     new_subdivisions.extend(subdivide_2D(region))
                 elif len(in_shape) == 3:
                     new_subdivisions.extend(subdivide_3D(region))
 
-
             else:
                 new_subdivisions.append(region)
-
 
         # Recompute coefficients
         weights = np.linalg.pinv(Psi)@x
@@ -346,17 +369,26 @@ def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True
 
         subdivisions = new_subdivisions
 
-        # Plot
+        if i > 0:
+            layers_indices.append(
+                np.arange(layers_indices[i-1][-1]+1, len(weights))
+            )
+        else:
+            layers_indices = [np.arange(len(weights))]
+
+        # Visualization
         title = f"{i+1} iterations, threshold={threshold:.0e}, RMSE={total_RSME:.2e}, {len(weights)} weights, {suffix}"
         if len(in_shape) == 1:
-            plot_1D(x, Psi@weights, subdivisions, title)
-            filename = "../Report/figures/noC1_1D_" + suffix + f"_iter{i+1}"
+            plot_1D(Psi, weights, x0, subdivisions, layers_indices, title)
+            filename = "figures/1D_" + suffix + f"_iter{i+1}"
             plt.savefig(filename)
+            plt.show()
             plt.close()
         elif len(in_shape) == 2:
             plot_2D(Psi@weights, in_shape, subdivisions, title)
-            filename = "../Report/figures/noC1_2D_" + suffix + f"_iter{i+1}"
+            filename = "figures/2D_" + suffix + f"_iter{i+1}"
             plt.savefig(filename)
+            plt.show()
             plt.close()
         elif len(in_shape) == 3:
             data = {
@@ -488,9 +520,9 @@ exit()
 """
 3D SDF test (slow)
 ------------------
+Each iteration's reconstruction is stored in another file for external visualization
 """
 data = np.load('../robotics-codes-from-scratch-master/data/sdf3D01.npy',allow_pickle=True).item()
-#print(data)
 nbDim = data['nbDim']
 t12 = data['x']   # 3D
 y = data['y']

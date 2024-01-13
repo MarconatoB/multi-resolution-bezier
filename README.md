@@ -1,1 +1,1 @@
-# Multi-resolution-basis-functions
+# Multi-resolution encoding with basis functions
