@@ -221,23 +221,30 @@ def plot_1D(Psi, weights, x0, subdivisions=[], layers_indices = [], title=""):
     """
 
     fig, axs = plt.subplots(len(layers_indices)+1, 1, sharex=True)
-    fig.set_size_inches(8,2*(len(layers_indices)+1))
 
-    for l, layer in enumerate(layers_indices):
-        x_layer = Psi[:, layer]@weights[layer]
-        axs[l].plot(x_layer)
-        axs[l].set_title(f"Layer {l+1}")
-        for s, segment in enumerate(subdivisions):
-            axs[l].axvline(segment[0], c='black', alpha=0.5)
+    if len(layers_indices) > 0:
+        ax = axs[-1]
+        fig.set_size_inches(8,2*(len(layers_indices)+1))
 
-    axs[-1].plot(Psi@weights, label="reconstruction")
-    axs[-1].plot(x, label="original")
+        for l, layer in enumerate(layers_indices):
+            x_layer = Psi[:, layer]@weights[layer]
+            axs[l].plot(x_layer)
+            axs[l].set_title(f"Layer {l+1}")
+            for s, segment in enumerate(subdivisions):
+                axs[l].axvline(segment[0], c='black', alpha=0.5)
+    else:
+        ax = axs
+        fig.set_size_inches(8, 6)
+
+
+    ax.plot(Psi@weights, label="reconstruction")
+    ax.plot(x, label="original")
     for s, segment in enumerate(subdivisions):
-        axs[-1].axvline(segment[0], c='black', alpha=0.5)
-    axs[-1].legend()
-    axs[-1].set_xlabel("Samples")
-    axs[-1].set_ylabel("Amplitude")
-    axs[-1].set_title(title)
+        ax.axvline(segment[0], c='black', alpha=0.5)
+    ax.legend()
+    ax.set_xlabel("Samples")
+    ax.set_ylabel("Amplitude")
+    ax.set_title(title)
     fig.tight_layout()
 
     return
@@ -379,7 +386,7 @@ def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True
         # Visualization
         title = f"{i+1} iterations, threshold={threshold:.0e}, RMSE={total_RSME:.2e}, {len(weights)} weights, {suffix}"
         if len(in_shape) == 1:
-            plot_1D(Psi, weights, x0, subdivisions, layers_indices, title)
+            plot_1D(Psi, weights, x0, subdivisions, [], title)
             filename = "figures/1D_" + suffix + f"_iter{i+1}"
             plt.savefig(filename)
             plt.show()
