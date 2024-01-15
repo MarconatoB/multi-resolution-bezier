@@ -46,7 +46,7 @@ def sdf(x):
 Parameters
 ----------
 """
-nbDim = 64;   # Number of datapoints per axis for visualization
+nbDim = 81;   # Number of datapoints per axis for visualization
 nbIn = 2;       # Dimension of input data (here: 2D surface embedded in 3D)
 
 
@@ -101,5 +101,5 @@ data = {
     'y': y,
 }
 
-np.save('sdf_obj02.npy', data, allow_pickle=True)
+np.save('sdf_obj02_81.npy', data, allow_pickle=True)
 #print('-dpng','sdf_obj01.png');

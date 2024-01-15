@@ -256,7 +256,7 @@ def plot_2D(x, in_shape, subdivisions=[], title=""):
         np.linspace(0, 1, in_shape[1])
     )
 
-    plt.figure(figsize=(16, 8))
+    plt.figure(figsize=(8, 8))
 
     # Reconstructed surface
     plt.axis('off')
@@ -372,7 +372,7 @@ def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True
         # Recompute coefficients
         weights = np.linalg.pinv(Psi)@x
         residual = x - Psi@weights
-        total_RSME = np.linalg.norm(residual)
+        total_RMSE = np.linalg.norm(residual)
 
         subdivisions = new_subdivisions
 
@@ -384,7 +384,7 @@ def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True
             layers_indices = [np.arange(len(weights))]
 
         # Visualization
-        title = f"{i+1} iterations, threshold={threshold:.0e}, RMSE={total_RSME:.2e}, {len(weights)} weights, {suffix}"
+        title = f"{i+1} iterations, threshold={threshold:.0e}, RMSE={total_RMSE:.2e}, {len(weights)} weights, {suffix}"
         if len(in_shape) == 1:
             plot_1D(Psi, weights, x0, subdivisions, [], title)
             filename = "figures/1D_" + suffix + f"_iter{i+1}"
@@ -406,9 +406,11 @@ def adaptive_fit(x, in_shape, nbOut, nbFct, iterations=1, threshold=0.0, C1=True
             label = 'C1' if C1 is True else 'C0'
             np.save(f"3D_rec/{label}_iter{i+1}.npy", data)
 
-        print(f"{i+1} iterations, {len(subdivisions)} subdivisions")
+        print(f"{i+1} iterations, {len(subdivisions)} subdivisions, RMSE={total_RMSE:.2e}, {len(weights)} weights")
 
     return Psi, weights
+
+
 
 
 """
@@ -430,7 +432,7 @@ nbOut = 1
 
 # Slice of the SDF as a 1D test signal
 x = x0[round(60/128*nbDim)::nbDim]
-'''
+
 # Using quadratic C1 continuous curves
 Psi, w = adaptive_fit(
     x,
@@ -453,7 +455,7 @@ Psi, w = adaptive_fit(
     threshold=1e-4,
     C1=False
 )
-'''
+
 
 """
 For cubic curves, use a SDF with 2^n samples
@@ -523,7 +525,6 @@ Psi, w = adaptive_fit(
     C1=False
 )
 
-exit()
 """
 3D SDF test (slow)
 ------------------
@@ -545,7 +546,7 @@ Psi, weights = adaptive_fit(
     in_shape,
     nbOut,
     nbFct=4,
-    iterations=3,
+    iterations=5,
     threshold=1e-2,
     C1=True
 )
@@ -555,7 +556,7 @@ Psi, weights = adaptive_fit(
     in_shape,
     nbOut,
     nbFct=4,
-    iterations=3,
+    iterations=4,
     threshold=1e-2,
     C1=False
 )
